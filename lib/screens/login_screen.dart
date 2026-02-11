@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import 'delegate/delegate_dashboard.dart';
 import 'enterprise/enterprise_dashboard.dart';
 import 'admin/admin_dashboard.dart'; // ✅ AJOUTER
@@ -22,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   static const String _baseUrl = "http://10.0.2.2:8081";
   final _storage = const FlutterSecureStorage();
+  final LocalAuthentication _localAuth = LocalAuthentication();
 
   UserRole _selectedRole = UserRole.delegate;
 
@@ -68,6 +70,40 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Checks if biometric authentication is available and performs it.
+  /// Returns true if biometrics are not available (skip) or if the user authenticated.
+  /// Returns false if the user failed or cancelled biometric auth.
+  Future<bool> _authenticateWithBiometrics() async {
+    try {
+      final isAvailable = await _localAuth.canCheckBiometrics;
+      final isDeviceSupported = await _localAuth.isDeviceSupported();
+
+      if (!isAvailable || !isDeviceSupported) {
+        // Biometrics not available, skip the check
+        return true;
+      }
+
+      final availableBiometrics = await _localAuth.getAvailableBiometrics();
+      if (availableBiometrics.isEmpty) {
+        return true;
+      }
+
+      final didAuthenticate = await _localAuth.authenticate(
+        localizedReason: 'Please verify your identity to continue',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
+      );
+
+      return didAuthenticate;
+    } catch (e) {
+      // If biometric auth fails due to an error, allow login to proceed
+      debugPrint('Biometric auth error: $e');
+      return true;
+    }
+  }
+
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -82,6 +118,19 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Verify identity with fingerprint before proceeding
+      final biometricPassed = await _authenticateWithBiometrics();
+      if (!biometricPassed) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric verification failed. Login cancelled.'),
+          ),
+        );
+        return;
+      }
+
       final uri = Uri.parse("$_baseUrl/api/auth/login");
 
       final res = await http.post(
@@ -401,27 +450,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 20),
 
-                     Align(
-  alignment: Alignment.centerRight,
-  child: TextButton(
-    onPressed: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const ForgotPasswordScreen(),
-        ),
-      );
-    },
-    child: const Text(
-      'Forgot Password?',
-      style: TextStyle(
-        color: _green,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  ),
-),
-
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ForgotPasswordScreen(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              color: _green,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
 
                       const SizedBox(height: 30),
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/user_model.dart';
+import '../services/chat_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final User user;
@@ -15,42 +16,18 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<Map<String, dynamic>> _chatMessages = [];
   bool _isStreaming = false;
 
-  static const String _geminiApiKey = 'AIzaSyAW93eq4Z2dCBSj2JOMnTrr5krQ2rTq1FY';
-
-  late final GenerativeModel _model;
-  late final ChatSession _chat;
+  late final ChatService _chatService;
 
   @override
   void initState() {
     super.initState();
-    _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
-      apiKey: _geminiApiKey,
-      systemInstruction: Content.system(
-        'You are MediNote AI, a helpful medical and pharmaceutical assistant chatbot. '
-        'You help pharmaceutical delegates, enterprise staff, and admins with questions '
-        'about medications, promotions, medical visits, and general pharmaceutical topics. '
-        'Keep your answers concise and professional. '
-        'The current user is ${widget.user.name} (${widget.user.role}).',
-      ),
+    _chatService = ChatService.instance;
+    _chatService.initialize(
+      userName: widget.user.name,
+      userRole: widget.user.role,
     );
-    _chat = _model.startChat();
-
-    _chatMessages.addAll([
-      {
-        'sender': 'bot',
-        'text': 'Hello ${widget.user.name}! 👋',
-        'type': 'greeting',
-      },
-      {
-        'sender': 'bot',
-        'text': 'I\'m MediNote AI. How can I help you today?',
-        'type': 'message',
-      },
-    ]);
   }
 
   void _scrollToBottom() {
@@ -69,11 +46,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (message.trim().isEmpty || _isStreaming) return;
 
     setState(() {
-      _chatMessages.add({'sender': 'user', 'text': message, 'type': 'message'});
+      _chatService.messages.add({
+        'sender': 'user',
+        'text': message,
+        'type': 'message',
+      });
       _messageController.clear();
       _isStreaming = true;
       // Add an empty bot message that will be filled word by word
-      _chatMessages.add({
+      _chatService.messages.add({
         'sender': 'bot',
         'text': '',
         'type': 'message',
@@ -86,8 +67,10 @@ class _ChatScreenState extends State<ChatScreen> {
     HapticFeedback.lightImpact();
 
     try {
-      final botMessageIndex = _chatMessages.length - 1;
-      final responseStream = _chat.sendMessageStream(Content.text(message));
+      final botMessageIndex = _chatService.messages.length - 1;
+      final responseStream = _chatService.chat.sendMessageStream(
+        Content.text(message),
+      );
       int wordCount = 0;
 
       await for (final chunk in responseStream) {
@@ -98,7 +81,7 @@ class _ChatScreenState extends State<ChatScreen> {
           for (final word in words) {
             if (!mounted) break;
             setState(() {
-              _chatMessages[botMessageIndex]['text'] += word;
+              _chatService.messages[botMessageIndex]['text'] += word;
             });
             _scrollToBottom();
 
@@ -118,11 +101,11 @@ class _ChatScreenState extends State<ChatScreen> {
         // Final haptic to signal completion
         HapticFeedback.mediumImpact();
         setState(() {
-          _chatMessages[botMessageIndex]['streaming'] = false;
+          _chatService.messages[botMessageIndex]['streaming'] = false;
           _isStreaming = false;
           // Trim any trailing whitespace
-          _chatMessages[botMessageIndex]['text'] =
-              (_chatMessages[botMessageIndex]['text'] as String).trim();
+          _chatService.messages[botMessageIndex]['text'] =
+              (_chatService.messages[botMessageIndex]['text'] as String).trim();
         });
         _scrollToBottom();
       }
@@ -131,14 +114,14 @@ class _ChatScreenState extends State<ChatScreen> {
         HapticFeedback.heavyImpact();
         setState(() {
           _isStreaming = false;
-          final lastMsg = _chatMessages.last;
+          final lastMsg = _chatService.messages.last;
           if (lastMsg['streaming'] == true &&
               (lastMsg['text'] as String).isEmpty) {
-            _chatMessages.last['text'] =
+            _chatService.messages.last['text'] =
                 'Sorry, something went wrong. Please try again.';
-            _chatMessages.last['type'] = 'error';
+            _chatService.messages.last['type'] = 'error';
           }
-          _chatMessages.last['streaming'] = false;
+          _chatService.messages.last['streaming'] = false;
         });
         _scrollToBottom();
         debugPrint('Gemini API error: $e');
@@ -169,9 +152,9 @@ class _ChatScreenState extends State<ChatScreen> {
               child: ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(16),
-                itemCount: _chatMessages.length,
+                itemCount: _chatService.messages.length,
                 itemBuilder: (context, index) {
-                  final message = _chatMessages[index];
+                  final message = _chatService.messages[index];
                   final isBot = message['sender'] == 'bot';
                   final isCurrentlyStreaming = message['streaming'] == true;
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/user_model.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -12,66 +14,136 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _chatMessages = [
-    {
-      'sender': 'bot',
-      'text': 'Hello ${DateTime.now().hour < 12 ? "Ahmed" : "Ahmed"}!',
-      'type': 'greeting',
-    },
-    {'sender': 'bot', 'text': 'How can I help you today?', 'type': 'question'},
-  ];
+  final ScrollController _scrollController = ScrollController();
+  final List<Map<String, dynamic>> _chatMessages = [];
+  bool _isStreaming = false;
 
-  void _sendMessage(String message) {
-    if (message.trim().isEmpty) return;
+  static const String _geminiApiKey = 'AIzaSyAW93eq4Z2dCBSj2JOMnTrr5krQ2rTq1FY';
+
+  late final GenerativeModel _model;
+  late final ChatSession _chat;
+
+  @override
+  void initState() {
+    super.initState();
+    _model = GenerativeModel(
+      model: 'gemini-2.0-flash',
+      apiKey: _geminiApiKey,
+      systemInstruction: Content.system(
+        'You are MediNote AI, a helpful medical and pharmaceutical assistant chatbot. '
+        'You help pharmaceutical delegates, enterprise staff, and admins with questions '
+        'about medications, promotions, medical visits, and general pharmaceutical topics. '
+        'Keep your answers concise and professional. '
+        'The current user is ${widget.user.name} (${widget.user.role}).',
+      ),
+    );
+    _chat = _model.startChat();
+
+    _chatMessages.addAll([
+      {
+        'sender': 'bot',
+        'text': 'Hello ${widget.user.name}! 👋',
+        'type': 'greeting',
+      },
+      {
+        'sender': 'bot',
+        'text': 'I\'m MediNote AI. How can I help you today?',
+        'type': 'message',
+      },
+    ]);
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _sendMessage(String message) async {
+    if (message.trim().isEmpty || _isStreaming) return;
 
     setState(() {
       _chatMessages.add({'sender': 'user', 'text': message, 'type': 'message'});
       _messageController.clear();
-
-      // Simulate bot response
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) {
-          setState(() {
-            _chatMessages.add({
-              'sender': 'bot',
-              'text':
-                  'Hey, can you give me information about current vitamin promotions?',
-              'type': 'promotion_question',
-            });
-            Future.delayed(const Duration(milliseconds: 500), () {
-              if (mounted) {
-                setState(() {
-                  _chatMessages.add({
-                    'sender': 'bot',
-                    'text':
-                        'Of course! Here are the current vitamin promotions:\n\n• Vitamin C 20% until April 30\n• Vitamin D offer: Buy 2, get the 3rd free until May 2',
-                    'type': 'promotion_response',
-                  });
-                });
-              }
-            });
-          });
-        }
+      _isStreaming = true;
+      // Add an empty bot message that will be filled word by word
+      _chatMessages.add({
+        'sender': 'bot',
+        'text': '',
+        'type': 'message',
+        'streaming': true,
       });
     });
-  }
+    _scrollToBottom();
 
-  void _handlePromotionAction(bool send) {
-    setState(() {
-      if (send) {
-        _chatMessages.add({
-          'sender': 'bot',
-          'text': 'Thank you! Details have been sent by email.',
-          'type': 'confirmation',
-        });
-      } else {
-        _chatMessages.add({
-          'sender': 'bot',
-          'text': 'Understood, you can ask for them later.',
-          'type': 'message',
-        });
+    // Light haptic to confirm send
+    HapticFeedback.lightImpact();
+
+    try {
+      final botMessageIndex = _chatMessages.length - 1;
+      final responseStream = _chat.sendMessageStream(Content.text(message));
+      int wordCount = 0;
+
+      await for (final chunk in responseStream) {
+        final text = chunk.text;
+        if (text != null && text.isNotEmpty && mounted) {
+          // Animate word by word
+          final words = text.split(RegExp(r'(?<=\s)'));
+          for (final word in words) {
+            if (!mounted) break;
+            setState(() {
+              _chatMessages[botMessageIndex]['text'] += word;
+            });
+            _scrollToBottom();
+
+            // Haptic feedback every few words like ChatGPT
+            wordCount++;
+            if (wordCount % 3 == 0) {
+              HapticFeedback.selectionClick();
+            }
+
+            // Small delay between words for the typewriter effect
+            await Future.delayed(const Duration(milliseconds: 25));
+          }
+        }
       }
-    });
+
+      if (mounted) {
+        // Final haptic to signal completion
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _chatMessages[botMessageIndex]['streaming'] = false;
+          _isStreaming = false;
+          // Trim any trailing whitespace
+          _chatMessages[botMessageIndex]['text'] =
+              (_chatMessages[botMessageIndex]['text'] as String).trim();
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+        setState(() {
+          _isStreaming = false;
+          final lastMsg = _chatMessages.last;
+          if (lastMsg['streaming'] == true &&
+              (lastMsg['text'] as String).isEmpty) {
+            _chatMessages.last['text'] =
+                'Sorry, something went wrong. Please try again.';
+            _chatMessages.last['type'] = 'error';
+          }
+          _chatMessages.last['streaming'] = false;
+        });
+        _scrollToBottom();
+        debugPrint('Gemini API error: $e');
+      }
+    }
   }
 
   @override
@@ -79,7 +151,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'AI Chatbot',
+          'MediNote AI',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFF27AE60),
@@ -95,11 +167,13 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Container(
               color: Colors.grey[50],
               child: ListView.builder(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(16),
                 itemCount: _chatMessages.length,
                 itemBuilder: (context, index) {
                   final message = _chatMessages[index];
                   final isBot = message['sender'] == 'bot';
+                  final isCurrentlyStreaming = message['streaming'] == true;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -122,53 +196,53 @@ class _ChatScreenState extends State<ChatScreen> {
                             horizontal: 14,
                             vertical: 10,
                           ),
-                          child: Text(
-                            message['text'],
-                            style: TextStyle(
-                              color: isBot ? Colors.black : Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
+                          child:
+                              isCurrentlyStreaming &&
+                                  (message['text'] as String).isEmpty
+                              // Thinking indicator while waiting for first token
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.grey[400],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Thinking...',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: SelectableText(
+                                        message['text'],
+                                        style: TextStyle(
+                                          color: isBot
+                                              ? Colors.black
+                                              : Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    // Blinking cursor while streaming
+                                    if (isCurrentlyStreaming)
+                                      const _BlinkingCursor(),
+                                  ],
+                                ),
                         ),
-                        // Promotion buttons après le message de promotion
-                        if (message['type'] == 'promotion_response')
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: () => _handlePromotionAction(true),
-                                  icon: const Icon(Icons.check, size: 16),
-                                  label: const Text('Yes, send email'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF27AE60),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                OutlinedButton(
-                                  onPressed: () =>
-                                      _handlePromotionAction(false),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(
-                                      color: Color(0xFF27AE60),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'No, later',
-                                    style: TextStyle(color: Color(0xFF27AE60)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                       ],
                     ),
                   );
@@ -185,6 +259,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: _isStreaming ? null : _sendMessage,
                     decoration: InputDecoration(
                       hintText: 'Write a message...',
                       border: OutlineInputBorder(
@@ -201,8 +277,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 FloatingActionButton(
                   mini: true,
-                  backgroundColor: const Color(0xFF27AE60),
-                  onPressed: () => _sendMessage(_messageController.text),
+                  backgroundColor: _isStreaming
+                      ? Colors.grey
+                      : const Color(0xFF27AE60),
+                  onPressed: _isStreaming
+                      ? null
+                      : () => _sendMessage(_messageController.text),
                   child: const Icon(Icons.send, color: Colors.white),
                 ),
               ],
@@ -216,6 +296,53 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+}
+
+/// A blinking cursor widget shown at the end of streaming text
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor();
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 530),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _controller.value,
+          child: Container(
+            width: 2,
+            height: 16,
+            margin: const EdgeInsets.only(left: 2, bottom: 1),
+            color: Colors.black54,
+          ),
+        );
+      },
+    );
   }
 }

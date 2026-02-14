@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'delegate/delegate_dashboard.dart';
 import 'enterprise/enterprise_dashboard.dart';
-import 'admin/admin_dashboard.dart'; // ✅ AJOUTER
+import 'admin/admin_dashboard.dart';
 import '../models/user_model.dart';
+import '../services/theme_provider.dart';
+import '../theme/app_design.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -21,13 +23,38 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isDarkMode = false;
   static const String _baseUrl = "http://10.0.2.2:8081";
   final _storage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
 
   UserRole _selectedRole = UserRole.delegate;
+  bool _rememberMe = false;
 
-  static const _green = Color(0xFF27AE60);
+  static const _green = AppDesign.green;
+  static const _greenDark = Color(0xFF1E8449);
+  static const _greenLight = AppDesign.greenLight;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to theme changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final themeProvider = ThemeInheritedWidget.of(context);
+      if (themeProvider != null) {
+        setState(() {
+          _isDarkMode = themeProvider.isDarkMode;
+        });
+        themeProvider.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isDarkMode = themeProvider.isDarkMode;
+            });
+          }
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -48,7 +75,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _roleString(UserRole role) {
-    // ✅ role string en minuscule pour admin dashboard (delegate/enterprise/admin)
     switch (role) {
       case UserRole.delegate:
         return 'delegate';
@@ -70,16 +96,12 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Checks if biometric authentication is available and performs it.
-  /// Returns true if biometrics are not available (skip) or if the user authenticated.
-  /// Returns false if the user failed or cancelled biometric auth.
   Future<bool> _authenticateWithBiometrics() async {
     try {
       final isAvailable = await _localAuth.canCheckBiometrics;
       final isDeviceSupported = await _localAuth.isDeviceSupported();
 
       if (!isAvailable || !isDeviceSupported) {
-        // Biometrics not available, skip the check
         return true;
       }
 
@@ -96,7 +118,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       return didAuthenticate;
     } catch (e) {
-      // If biometric auth fails due to an error, allow login to proceed
       debugPrint('Biometric auth error: $e');
       return true;
     }
@@ -108,7 +129,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        const SnackBar(
+          content: Text('Please fill in all fields'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -116,7 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Verify identity with fingerprint before proceeding
       final biometricPassed = await _authenticateWithBiometrics();
       if (!biometricPassed) {
         if (!mounted) return;
@@ -124,6 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Biometric verification failed. Login cancelled.'),
+            backgroundColor: Colors.red,
           ),
         );
         return;
@@ -138,20 +162,18 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (res.statusCode != 200) {
-        // Ton SecurityConfig renvoie 401 JSON, donc on affiche juste un message propre
         throw Exception("Invalid email or password");
       }
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final token = data["accessToken"] as String?;
-      final role = (data["role"] as String?)?.toUpperCase(); // "ADMIN" ...
+      final role = (data["role"] as String?)?.toUpperCase();
       final mail = data["email"] as String?;
 
       if (token == null || role == null || mail == null) {
         throw Exception("Bad server response");
       }
 
-      // Stockage sécurisé
       await _storage.write(key: "accessToken", value: token);
       await _storage.write(key: "role", value: role);
       await _storage.write(key: "email", value: mail);
@@ -159,7 +181,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      // Convertir role backend -> UserRole flutter
       final UserRole userRole;
       if (role == "DELEGATE") {
         userRole = UserRole.delegate;
@@ -179,14 +200,13 @@ class _LoginScreenState extends State<LoginScreen> {
             : userRole == UserRole.enterprise
             ? 'Staff User'
             : 'Admin PharmaCare',
-        role: role.toLowerCase(), // si tu utilises minuscule dans l'app
+        role: role.toLowerCase(),
         userRole: userRole,
         company: 'PharmaCare Inc.',
         phone: userRole == UserRole.delegate ? '+33 6 12 34 56 78' : null,
         region: userRole == UserRole.delegate ? 'Île-de-France' : null,
       );
 
-      // Navigation selon role backend
       if (userRole == UserRole.delegate) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => DelegateDashboard(user: user)),
@@ -203,40 +223,382 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Login failed: ${e.toString()}")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  Widget _roleButton(UserRole role) {
-    final selected = _selectedRole == role;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedRole = role),
+  @override
+  Widget build(BuildContext context) {
+    final scaffoldBackgroundColor = _isDarkMode ? AppDesign.darkBackground : Colors.white;
+    final cardColor = AppDesign.surface(_isDarkMode);
+    final textColor = AppDesign.textPrimary(_isDarkMode);
+    final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
+    
+    return Scaffold(
+      body: SingleChildScrollView(
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          height: MediaQuery.of(context).size.height,
           decoration: BoxDecoration(
-            color: selected ? _green : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: _isDarkMode
+                  ? [
+                      _green.withOpacity(0.1),
+                      _greenLight.withOpacity(0.05),
+                      const Color(0xFF121212),
+                    ]
+                  : [
+                      _green.withOpacity(0.15),
+                      _greenLight.withOpacity(0.08),
+                      Colors.white,
+                    ],
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
             children: [
-              Icon(
-                _roleIcon(role),
-                color: selected ? Colors.white : Colors.grey,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _roleLabel(role),
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : Colors.grey,
+              Positioned(
+                top: -80,
+                right: -50,
+                child: Container(
+                  width: 220,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _green.withOpacity(0.08),
+                  ),
                 ),
+              ),
+              Positioned(
+                bottom: 120,
+                left: -80,
+                child: Container(
+                  width: 240,
+                  height: 240,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _greenLight.withOpacity(0.06),
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 650),
+                    builder: (context, value, child) {
+                      return Opacity(
+                        opacity: value,
+                        child: Transform.translate(
+                          offset: Offset(0, 18 * (1 - value)),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 20),
+                  // Logo & Title with Picture
+                  Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [_green, _greenLight],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _green.withOpacity(0.4),
+                          blurRadius: 25,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(70),
+                      child: Image.asset(
+                        'assets/images/login1.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.local_pharmacy,
+                            size: 70,
+                            color: Colors.white,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'PharmaCare',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      foreground: Paint()
+                        ..shader = LinearGradient(
+                          colors: [_green, _greenDark],
+                        ).createShader(
+                          const Rect.fromLTWH(0, 0, 200, 50),
+                        ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Medical Note Management',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: secondaryTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _isDarkMode ? const Color(0xFF1E1E1E).withOpacity(0.82) : Colors.white.withOpacity(0.86),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _green.withOpacity(_isDarkMode ? 0.18 : 0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // Role Selector
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: UserRole.values.map((role) {
+                              final isSelected = _selectedRole == role;
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _selectedRole = role),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? _green : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          _roleIcon(role),
+                                          color: isSelected ? Colors.white : Colors.grey[600],
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          _roleLabel(role),
+                                          style: TextStyle(
+                                            color: isSelected ? Colors.white : Colors.grey[600],
+                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                  // Email Field
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _green.withOpacity(0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        hintText: 'Email address',
+                        hintStyle: TextStyle(color: secondaryTextColor),
+                        prefixIcon: Icon(Icons.email_outlined, color: _green),
+                        filled: true,
+                        fillColor: cardColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  // Password Field
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _green.withOpacity(0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        hintText: 'Password',
+                        hintStyle: TextStyle(color: secondaryTextColor),
+                        prefixIcon: Icon(Icons.lock_outline, color: _green),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            color: _green,
+                          ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                        filled: true,
+                        fillColor: cardColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _rememberMe,
+                        activeColor: _green,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        side: BorderSide(color: _green.withOpacity(0.6)),
+                        onChanged: (value) => setState(() => _rememberMe = value ?? false),
+                      ),
+                      Text(
+                        'Remember me',
+                        style: TextStyle(
+                          color: secondaryTextColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  // Forgot Password
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                      ),
+                      child: Text(
+                        'Forgot Password?',
+                        style: TextStyle(
+                          color: _green,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Login Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 4,
+                        shadowColor: _green.withOpacity(0.4),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Biometric Login
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _handleLogin,
+                    icon: Icon(Icons.fingerprint, color: _green),
+                    label: Text(
+                      'Login with Biometrics',
+                      style: TextStyle(color: _green),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                      side: BorderSide(color: _green.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  // Footer
+                  Text(
+                    'PharmaCare © 2024',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: secondaryTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
               ),
             ],
           ),
@@ -244,337 +606,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        color: Colors.white,
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              right: 0,
-              child: CustomPaint(
-                painter: TopShapePainter(),
-                size: const Size(200, 150),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              child: CustomPaint(
-                painter: BottomWavesPainter(),
-                size: const Size(400, 100),
-              ),
-            ),
-            SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 40),
-
-                      // Illustration Section
-                      Center(
-                        child: Container(
-                          height: 280,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _green.withOpacity(0.08),
-                                blurRadius: 15,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: Image.asset(
-                              'assets/images/login1.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.local_pharmacy,
-                                      size: 80,
-                                      color: _green,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'PharmaCare',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall
-                                          ?.copyWith(
-                                            color: _green,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Role Selection (✅ 3 boutons)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.all(8),
-                        child: Row(
-                          children: [
-                            _roleButton(UserRole.delegate),
-                            const SizedBox(width: 8),
-                            _roleButton(UserRole.enterprise),
-                            const SizedBox(width: 8),
-                            _roleButton(UserRole.admin),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      // Email Field
-                      Text(
-                        'Email',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.grey[200]!,
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.05),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: _emailController,
-                          decoration: const InputDecoration(
-                            hintText: 'your@email.com',
-                            border: InputBorder.none,
-                            prefixIcon: Icon(
-                              Icons.email_outlined,
-                              color: _green,
-                            ),
-                            contentPadding: EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Password Field
-                      Text(
-                        'Password',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.grey[200]!,
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.05),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            hintText: '••••••••',
-                            border: InputBorder.none,
-                            prefixIcon: const Icon(
-                              Icons.lock_outlined,
-                              color: _green,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: Colors.grey,
-                              ),
-                              onPressed: () => setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              }),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ForgotPasswordScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'Forgot Password?',
-                            style: TextStyle(
-                              color: _green,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      // Login Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _green,
-                            elevation: 4,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text(
-                                  'Login',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 60),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Custom painter for top decoration
-class TopShapePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF27AE60).withOpacity(0.05)
-      ..style = PaintingStyle.fill;
-
-    Path path = Path();
-    path.moveTo(0, 0);
-    path.lineTo(size.width, 0);
-    path.lineTo(size.width, size.height * 0.8);
-    path.quadraticBezierTo(
-      size.width * 0.7,
-      size.height * 0.5,
-      size.width * 0.4,
-      size.height,
-    );
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
-}
-
-// Custom painter for bottom waves
-class BottomWavesPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF27AE60).withOpacity(0.04)
-      ..style = PaintingStyle.fill;
-
-    Path path = Path();
-    path.moveTo(0, size.height * 0.5);
-    path.quadraticBezierTo(
-      size.width * 0.25,
-      size.height * 0.2,
-      size.width * 0.5,
-      size.height * 0.5,
-    );
-    path.quadraticBezierTo(
-      size.width * 0.75,
-      size.height * 0.8,
-      size.width,
-      size.height * 0.5,
-    );
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

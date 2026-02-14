@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../services/theme_provider.dart';
 
 class EnterpriseDashboard extends StatefulWidget {
   final User user;
@@ -10,17 +11,41 @@ class EnterpriseDashboard extends StatefulWidget {
   State<EnterpriseDashboard> createState() => _EnterpriseDashboardState();
 }
 
-
 class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
   int _selectedTab = 0;
   final TextEditingController _messageController = TextEditingController();
   final List<Map<String, String>> _chatMessages = [
     {
       'sender': 'bot',
-      'text':
-          'Bonjour Admin! 👋 Bienvenue sur PharmaCare. Je suis votre assistant IA.',
+      'text': 'Bonjour Admin! 👋 Bienvenue sur PharmaCare. Je suis votre assistant IA.',
     },
   ];
+  bool _isDarkMode = false;
+
+  static const _green = Color(0xFF27AE60);
+  static const _greenLight = Color(0xFF52BE80);
+  static const _greenDark = Color(0xFF1E8449);
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to theme changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final themeProvider = ThemeInheritedWidget.of(context);
+      if (themeProvider != null) {
+        setState(() {
+          _isDarkMode = themeProvider.isDarkMode;
+        });
+        themeProvider.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isDarkMode = themeProvider.isDarkMode;
+            });
+          }
+        });
+      }
+    });
+  }
 
   void _sendMessage(String message) {
     if (message.trim().isEmpty) return;
@@ -44,57 +69,138 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2C3E50);
+    final secondaryTextColor = _isDarkMode ? Colors.grey[400] : Colors.grey[600];
+    final tabBackgroundColor = _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+    
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Centre de Gestion',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: const Color(0xFF27AE60),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
       body: Column(
         children: [
+          // Custom Header
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_green, _greenLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _green.withOpacity(0.4),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.local_pharmacy,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Centre de Gestion',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            'PharmaCare Enterprise',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.logout, color: Colors.white, size: 22),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
           // Tab Buttons
           Container(
-            color: const Color(0xFF27AE60),
-            padding: const EdgeInsets.all(8.0),
+            decoration: BoxDecoration(
+              color: tabBackgroundColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedTab = 0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: _selectedTab == 0
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        color: _selectedTab == 0 ? _green.withOpacity(0.1) : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _selectedTab == 0 ? _green : Colors.transparent,
+                            width: 3,
+                          ),
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.assistant,
-                            color: _selectedTab == 0
-                                ? const Color(0xFF27AE60)
-                                : Colors.white,
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _selectedTab == 0 ? _green : (_isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[200]),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.assistant,
+                              color: _selectedTab == 0 ? Colors.white : (_isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             'Assistant IA',
                             style: TextStyle(
-                              color: _selectedTab == 0
-                                  ? const Color(0xFF27AE60)
-                                  : Colors.white,
-                              fontWeight: FontWeight.bold,
+                              color: _selectedTab == 0 ? _green : (_isDarkMode ? Colors.grey[300] : Colors.grey[600]),
+                              fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -105,31 +211,40 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
                 Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedTab = 1),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: _selectedTab == 1
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        color: _selectedTab == 1 ? _green.withOpacity(0.1) : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _selectedTab == 1 ? _green : Colors.transparent,
+                            width: 3,
+                          ),
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.dashboard,
-                            color: _selectedTab == 1
-                                ? const Color(0xFF27AE60)
-                                : Colors.white,
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _selectedTab == 1 ? _green : (_isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[200]),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.dashboard,
+                              color: _selectedTab == 1 ? Colors.white : (_isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             'Analytics',
                             style: TextStyle(
-                              color: _selectedTab == 1
-                                  ? const Color(0xFF27AE60)
-                                  : Colors.white,
-                              fontWeight: FontWeight.bold,
+                              color: _selectedTab == 1 ? _green : (_isDarkMode ? Colors.grey[300] : Colors.grey[600]),
+                              fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -150,164 +265,271 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
   }
 
   Widget _buildChatTab() {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            reverse: true,
-            padding: const EdgeInsets.all(16),
-            itemCount: _chatMessages.length,
-            itemBuilder: (context, index) {
-              final msg = _chatMessages[_chatMessages.length - 1 - index];
-              final isUser = msg['sender'] == 'user';
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: _isDarkMode
+              ? [
+                  const Color(0xFF121212),
+                  const Color(0xFF1E1E1E),
+                ]
+              : [
+                  Colors.grey[50]!,
+                  Colors.white,
+                ],
+        ),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              reverse: true,
+              padding: const EdgeInsets.all(16),
+              itemCount: _chatMessages.length,
+              itemBuilder: (context, index) {
+                final msg = _chatMessages[_chatMessages.length - 1 - index];
+                final isUser = msg['sender'] == 'user';
 
-              return Align(
-                alignment: isUser
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                return Align(
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: isUser
+                          ? LinearGradient(
+                              colors: [_green, _greenLight],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: isUser ? null : Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(isUser ? 20 : 4),
+                        topRight: Radius.circular(isUser ? 4 : 20),
+                        bottomLeft: const Radius.circular(20),
+                        bottomRight: const Radius.circular(20),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isUser ? _green : Colors.grey).withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      msg['text'] ?? '',
+                      style: TextStyle(
+                        color: isUser ? Colors.white : (_isDarkMode ? Colors.white : const Color(0xFF2C3E50)),
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                    ),
                   ),
+                );
+              },
+            ),
+          ),
+          // Input area
+          Container(
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: _green.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: TextField(
+                      controller: _messageController,
+                      style: TextStyle(color: _isDarkMode ? Colors.white : const Color(0xFF2C3E50)),
+                      decoration: InputDecoration(
+                        hintText: 'Posez une question...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
                   decoration: BoxDecoration(
-                    color: isUser ? const Color(0xFF27AE60) : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    msg['text'] ?? '',
-                    style: TextStyle(
-                      color: isUser ? Colors.white : Colors.black,
-                      fontSize: 14,
+                    gradient: LinearGradient(
+                      colors: [_green, _greenLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _green.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: () => _sendMessage(_messageController.text),
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    padding: const EdgeInsets.all(12),
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    hintText: 'Posez une question...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FloatingActionButton(
-                mini: true,
-                backgroundColor: const Color(0xFF27AE60),
-                onPressed: () => _sendMessage(_messageController.text),
-                child: const Icon(Icons.send),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildAnalyticsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'KPIs Généraux',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _buildKPICard(
-            'Chiffre d\'Affaires',
-            '€128,450',
-            '+15%',
-            Icons.trending_up,
-            const Color(0xFF27AE60),
-          ),
-          _buildKPICard(
-            'Nombre de Délégués',
-            '24',
-            '+3',
-            Icons.people,
-            const Color(0xFF2980B9),
-          ),
-          _buildKPICard(
-            'Commandes Totales',
-            '542',
-            '+8%',
-            Icons.shopping_bag,
-            const Color(0xFFE67E22),
-          ),
-          _buildKPICard(
-            'Taux de Satisfaction',
-            '94%',
-            '+2%',
-            Icons.star,
-            const Color(0xFF9B59B6),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Gestion',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [
-              _buildManagementCard(
-                'Délégués',
-                Icons.people,
-                const Color(0xFF27AE60),
-              ),
-              _buildManagementCard(
-                'Produits',
-                Icons.medication,
-                const Color(0xFF2980B9),
-              ),
-              _buildManagementCard(
-                'Rapports',
-                Icons.assessment,
-                const Color(0xFFE67E22),
-              ),
-              _buildManagementCard(
-                'Paramètres',
-                Icons.settings,
-                const Color(0xFF9B59B6),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Top Délégués',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _buildDelegateCard('Dr. Jean Dupont', '€15,230', '98%'),
-          _buildDelegateCard('Dr. Marie Legrand', '€12,800', '96%'),
-          _buildDelegateCard('Dr. Paul Moreau', '€11,500', '92%'),
-        ],
+    final cardColor = _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2C3E50);
+    final secondaryTextColor = _isDarkMode ? Colors.grey[400] : Colors.grey[600];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF121212) : Colors.grey[50],
       ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('KPIs Généraux', textColor),
+            const SizedBox(height: 16),
+            _buildKPICard(
+              'Chiffre d\'Affaires',
+              '€128,450',
+              '+15%',
+              Icons.trending_up,
+              const Color(0xFF27AE60),
+              cardColor,
+              textColor,
+              secondaryTextColor!,
+            ),
+            _buildKPICard(
+              'Nombre de Délégués',
+              '24',
+              '+3',
+              Icons.people,
+              const Color(0xFF2980B9),
+              cardColor,
+              textColor,
+              secondaryTextColor!,
+            ),
+            _buildKPICard(
+              'Commandes Totales',
+              '542',
+              '+8%',
+              Icons.shopping_bag,
+              const Color(0xFFE67E22),
+              cardColor,
+              textColor,
+              secondaryTextColor!,
+            ),
+            _buildKPICard(
+              'Taux de Satisfaction',
+              '94%',
+              '+2%',
+              Icons.star,
+              const Color(0xFF9B59B6),
+              cardColor,
+              textColor,
+              secondaryTextColor!,
+            ),
+            const SizedBox(height: 28),
+            _buildSectionTitle('Gestion', textColor),
+            const SizedBox(height: 16),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 1.1,
+              children: [
+                _buildManagementCard(
+                  'Délégués',
+                  Icons.people,
+                  const Color(0xFF27AE60),
+                  cardColor,
+                ),
+                _buildManagementCard(
+                  'Produits',
+                  Icons.medication,
+                  const Color(0xFF2980B9),
+                  cardColor,
+                ),
+                _buildManagementCard(
+                  'Rapports',
+                  Icons.assessment,
+                  const Color(0xFFE67E22),
+                  cardColor,
+                ),
+                _buildManagementCard(
+                  'Paramètres',
+                  Icons.settings,
+                  const Color(0xFF9B59B6),
+                  cardColor,
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            _buildSectionTitle('Top Délégués', textColor),
+            const SizedBox(height: 16),
+            _buildDelegateCard('Dr. Jean Dupont', '€15,230', '98%', cardColor, textColor, secondaryTextColor!),
+            _buildDelegateCard('Dr. Marie Legrand', '€12,800', '96%', cardColor, textColor, secondaryTextColor!),
+            _buildDelegateCard('Dr. Paul Moreau', '€11,500', '92%', cardColor, textColor, secondaryTextColor!),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, Color textColor) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: _green,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -317,79 +539,113 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     String change,
     IconData icon,
     Color color,
+    Color cardColor,
+    Color textColor,
+    Color secondaryTextColor,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(12),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(_isDarkMode ? 0.15 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: color, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(fontSize: 13, color: secondaryTextColor),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 4),
-              Text(
-                value,
+              child: Text(
+                change,
                 style: const TextStyle(
-                  fontSize: 18,
+                  color: Colors.green,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ],
-          ),
-          Column(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  change,
-                  style: const TextStyle(
-                    color: Colors.green,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildManagementCard(String title, IconData icon, Color color) {
+  Widget _buildManagementCard(String title, IconData icon, Color color, Color cardColor) {
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(12),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(_isDarkMode ? 0.15 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 36, color: color),
-          const SizedBox(height: 8),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(icon, size: 32, color: color),
+          ),
+          const SizedBox(height: 16),
           Text(
             title,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: color,
+              color: _isDarkMode ? Colors.white : color,
             ),
             textAlign: TextAlign.center,
           ),
@@ -398,39 +654,93 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     );
   }
 
-  Widget _buildDelegateCard(String name, String sales, String rating) {
+  Widget _buildDelegateCard(String name, String sales, String rating, Color cardColor, Color textColor, Color secondaryTextColor) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(
-                sales,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '⭐ $rating',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: _green.withOpacity(_isDarkMode ? 0.15 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_green, _greenLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Center(
+                    child: Text(
+                      name.split(' ').map((e) => e[0]).take(2).join().toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      sales,
+                      style: TextStyle(fontSize: 13, color: secondaryTextColor),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    rating,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

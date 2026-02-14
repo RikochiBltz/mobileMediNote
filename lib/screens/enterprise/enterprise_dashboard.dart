@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../services/theme_provider.dart';
+import '../../theme/app_design.dart';
+import '../../widgets/pressable_scale.dart';
+import '../../widgets/shimmer_box.dart';
 import '../profile_screen.dart';
 import '../chat_screen.dart';
 
@@ -13,34 +17,136 @@ class EnterpriseDashboard extends StatefulWidget {
 }
 
 class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
+  static const _green = AppDesign.green;
+  static const _greenLight = AppDesign.greenLight;
   int _currentIndex = 0;
+  bool _isDarkMode = false;
+  bool _isDashboardLoading = true;
+  bool _isReportsLoading = false;
+  bool _isCalendarLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 650), () {
+      if (mounted) {
+        setState(() => _isDashboardLoading = false);
+      }
+    });
+    // Listen to theme changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final themeProvider = ThemeInheritedWidget.of(context);
+      if (themeProvider != null) {
+        setState(() {
+          _isDarkMode = themeProvider.isDarkMode;
+        });
+        themeProvider.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isDarkMode = themeProvider.isDarkMode;
+            });
+          }
+        });
+      }
+    });
+  }
+
+  Future<void> _refreshDashboard() async {
+    setState(() => _isDashboardLoading = true);
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (mounted) {
+      setState(() => _isDashboardLoading = false);
+    }
+  }
+
+  Future<void> _refreshReports() async {
+    setState(() => _isReportsLoading = true);
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() => _isReportsLoading = false);
+    }
+  }
+
+  Future<void> _refreshCalendar() async {
+    setState(() => _isCalendarLoading = true);
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() => _isCalendarLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = _isDarkMode;
+    final cardColor = AppDesign.surface(isDark);
+    final navInactiveColor = AppDesign.navInactive(isDark);
+    
     return Scaffold(
-      body: _buildCurrentPage(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF27AE60),
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: AppDesign.pageGradient(isDark),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.description),
-            label: 'Rapports',
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: KeyedSubtree(
+            key: ValueKey(_currentIndex),
+            child: _buildCurrentPage(),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
-            label: 'Calendar',
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          border: Border(
+            top: BorderSide(color: AppDesign.subtleBorder(isDark)),
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chatbot'),
-        ],
+          boxShadow: [
+            BoxShadow(
+              color: _green.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          backgroundColor: cardColor,
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          selectedItemColor: _green,
+          unselectedItemColor: navInactiveColor,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
+          items: [
+            BottomNavigationBarItem(
+              icon: _buildNavIcon(icon: Icons.dashboard, index: 0),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildNavIcon(icon: Icons.description, index: 1),
+              label: 'Rapports',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildNavIcon(icon: Icons.calendar_today, index: 2),
+              label: 'Calendar',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildNavIcon(icon: Icons.person, index: 3),
+              label: 'Profile',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildNavIcon(icon: Icons.chat, index: 4),
+              label: 'Chatbot',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -62,191 +168,388 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     }
   }
 
-  // ================= DASHBOARD =================
   Widget _buildDashboardPage() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Dashboard',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF27AE60),
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
+    final cardColor = AppDesign.surface(_isDarkMode);
+    final textColor = AppDesign.textPrimary(_isDarkMode);
+    final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
 
-            // ===== HEADER CARD (same Delegate style) =====
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              'Hello ${widget.user.name.split(' ')[0]} ',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+    return SafeArea(
+      child: RefreshIndicator(
+        color: _green,
+        onRefresh: _refreshDashboard,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _isDashboardLoading
+                ? _buildDashboardSkeleton(cardColor)
+                : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [_green, _greenLight],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _green.withOpacity(0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Hello ${widget.user.name.split(' ')[0]} ',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
                               ),
+                              const Icon(Icons.emoji_people, color: Colors.white, size: 20),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Admin panel ready - manage delegates & reports.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white70,
                             ),
-                            const Text('👋'),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Admin panel ready — manage delegates & reports.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[700],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Center(
+                        child: Text(
+                          widget.user.name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join().toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF27AE60).withOpacity(0.2),
-                      border: Border.all(
-                        color: const Color(0xFF27AE60),
-                        width: 2,
                       ),
                     ),
-                    child: Center(
-                      child: Text(
-                        widget.user.name
-                            .split(' ')
-                            .where((e) => e.isNotEmpty)
-                            .map((e) => e[0])
-                            .take(2)
-                            .join()
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF27AE60),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ===== KPI CARDS =====
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: GridView.count(
+              const SizedBox(height: 24),
+              _buildSectionTitle('Key Metrics'),
+              const SizedBox(height: 12),
+              GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.0,
                 children: [
                   _buildKPICard(
                     'Sales',
-                    '₹45,230',
+                    'Rs 45,230',
                     Icons.trending_up,
                     const Color(0xFF27AE60),
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
                   ),
                   _buildKPICard(
                     'Products',
                     '328',
                     Icons.inventory_2,
                     const Color(0xFF2980B9),
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
                   ),
                   _buildKPICard(
                     'Delegates',
                     '24',
                     Icons.people,
                     const Color(0xFFE67E22),
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
                   ),
                   _buildKPICard(
                     'Orders',
                     '156',
                     Icons.shopping_cart,
                     const Color(0xFF9B59B6),
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 30),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
+      ),
       ),
     );
   }
 
-  // ================= REPORTS =================
+  Widget _buildDashboardSkeleton(Color cardColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSkeletonBox(height: 140, radius: 20, color: cardColor),
+        const SizedBox(height: 24),
+        _buildSkeletonBox(height: 20, width: 150, radius: 8, color: cardColor),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.0,
+          children: List.generate(
+            4,
+            (_) => _buildSkeletonBox(height: 150, radius: 16, color: cardColor),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSkeletonBox({
+    required double height,
+    required double radius,
+    required Color color,
+    double? width,
+  }) {
+    return ShimmerBox(
+      width: width,
+      height: height,
+      radius: radius,
+      baseColor: _isDarkMode ? color.withOpacity(0.75) : Colors.white.withOpacity(0.9),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    final textColor = AppDesign.textPrimary(_isDarkMode);
+
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: _green,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildReportsPage() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Rapports',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF27AE60),
+    final cardColor = AppDesign.surface(_isDarkMode);
+    final titleColor = AppDesign.textPrimary(_isDarkMode);
+    final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
+
+    return SafeArea(
+      child: RefreshIndicator(
+        color: _green,
+        onRefresh: _refreshReports,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.72,
+              child: _isReportsLoading
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildSkeletonBox(height: 90, radius: 20, color: cardColor, width: 90),
+                        const SizedBox(height: 20),
+                        _buildSkeletonBox(height: 24, width: 180, radius: 8, color: cardColor),
+                        const SizedBox(height: 10),
+                        _buildSkeletonBox(height: 16, width: 240, radius: 8, color: cardColor),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: _green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(
+                            Icons.description,
+                            size: 56,
+                            color: _green,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Coming Soon',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: _green,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Reports feature is under development',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Pull down to refresh',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: titleColor.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 1,
       ),
-      body: const Center(child: Text('Reports coming soon')),
     );
   }
 
-  // ================= CALENDAR =================
   Widget _buildCalendarPage() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Calendar',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF27AE60),
+    final cardColor = AppDesign.surface(_isDarkMode);
+    final titleColor = AppDesign.textPrimary(_isDarkMode);
+    final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
+
+    return SafeArea(
+      child: RefreshIndicator(
+        color: _green,
+        onRefresh: _refreshCalendar,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.72,
+              child: _isCalendarLoading
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildSkeletonBox(height: 90, radius: 20, color: cardColor, width: 90),
+                        const SizedBox(height: 20),
+                        _buildSkeletonBox(height: 24, width: 180, radius: 8, color: cardColor),
+                        const SizedBox(height: 10),
+                        _buildSkeletonBox(height: 16, width: 240, radius: 8, color: cardColor),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: _green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(
+                            Icons.calendar_month,
+                            size: 56,
+                            color: _green,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Coming Soon',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: _green,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Calendar feature is under development',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Pull down to refresh',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: titleColor.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 1,
       ),
-      body: const Center(child: Text('Calendar coming soon')),
     );
   }
 
-  // ================= KPI CARD =================
-  Widget _buildKPICard(String title, String value, IconData icon, Color color) {
-    return Container(
+  Widget _buildKPICard(
+    String title,
+    String value,
+    IconData icon,
+    Color color, {
+    required Color cardColor,
+    required Color textColor,
+    required Color secondaryTextColor,
+  }) {
+    return PressableScale(
+      onTap: () {},
+      child: Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 1,
+            color: color.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -256,32 +559,54 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 22),
           ),
+          const SizedBox(height: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 18,
+                style: TextStyle(
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 title,
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                style: TextStyle(color: secondaryTextColor, fontSize: 12),
               ),
             ],
           ),
         ],
+      ),
+    ));
+  }
+
+  Widget _buildNavIcon({required IconData icon, required int index}) {
+    final isSelected = _currentIndex == index;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? _green.withOpacity(0.12)
+            : (_isDarkMode ? AppDesign.darkNavItem : Colors.grey[100]),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        icon,
+        size: 22,
+        color: isSelected ? _green : AppDesign.navInactive(_isDarkMode),
       ),
     );
   }

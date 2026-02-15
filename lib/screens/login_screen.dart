@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isDarkMode = false;
-  static const String _baseUrl = "http://10.0.2.2:8081";
+  static const String _baseUrl = "https://medinote-cdcc.onrender.com";
   final _storage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
 

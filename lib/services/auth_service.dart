@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
-  static const String _baseUrl = "http://10.0.2.2:8081";
+  static const String _baseUrl = "https://medinote-cdcc.onrender.com";
   static const _storage = FlutterSecureStorage();
   Future<void> forgotPassword(String email) async {
     final uri = Uri.parse("$_baseUrl/api/auth/forgot-password");

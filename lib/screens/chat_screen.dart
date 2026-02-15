@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/user_model.dart';
+import '../services/chat_service.dart';
 import '../services/theme_provider.dart';
 import '../theme/app_design.dart';
 
@@ -17,12 +18,10 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<Map<String, dynamic>> _chatMessages = [];
   bool _isStreaming = false;
   bool _showScrollToBottom = false;
   bool _isDarkMode = false;
 
-  static const String _geminiApiKey = 'AIzaSyAW93eq4Z2dCBSj2JOMnTrr5krQ2rTq1FY';
   static const _green = AppDesign.green;
   static const _greenLight = AppDesign.greenLight;
   static const _greenDark = Color(0xFF1E8449);
@@ -34,11 +33,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   static const _darkSurface = Color(0xFF1E1E1E);
   static const _darkCard = Color(0xFF2D2D2D);
 
-  late final GenerativeModel _model;
-  late final ChatSession _chat;
+  late final ChatService _chatService;
 
   late AnimationController _bubbleController;
   late Animation<double> _bubbleAnimation;
+  List<Map<String, dynamic>> get _chatMessages => _chatService.messages;
 
   // Quick action suggestions
   final List<String> _quickActions = [
@@ -61,33 +60,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       curve: Curves.easeOutBack,
     );
 
-    _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
-      apiKey: _geminiApiKey,
-      systemInstruction: Content.system(
-        'You are MediNote AI, a helpful medical and pharmaceutical assistant chatbot. '
-        'You help pharmaceutical delegates, enterprise staff, and admins with questions '
-        'about medications, promotions, medical visits, and general pharmaceutical topics. '
-        'Keep your answers concise and professional. '
-        'The current user is ${widget.user.name} (${widget.user.role}).',
-      ),
+    _chatService = ChatService.instance;
+    _chatService.initialize(
+      userName: widget.user.name,
+      userRole: widget.user.role,
     );
-    _chat = _model.startChat();
-
-    _chatMessages.addAll([
-      {
-        'sender': 'bot',
-        'text': 'Hello ${widget.user.name}! How can I assist you today?',
-        'type': 'greeting',
-        'time': DateTime.now(),
-      },
-      {
-        'sender': 'bot',
-        'text': "I'm MediNote AI. How can I help you today?",
-        'type': 'message',
-        'time': DateTime.now(),
-      },
-    ]);
 
     // Scroll listener for scroll-to-bottom button
     _scrollController.addListener(() {
@@ -179,7 +156,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     try {
       final botMessageIndex = _chatMessages.length - 1;
-      final responseStream = _chat.sendMessageStream(Content.text(message));
+      final responseStream = _chatService.chat.sendMessageStream(Content.text(message));
       int wordCount = 0;
 
       await for (final chunk in responseStream) {
@@ -277,8 +254,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (index == 0) return true;
     final currentMessage = _chatMessages[index];
     final previousMessage = _chatMessages[index - 1];
-    final currentTime = currentMessage['time'] as DateTime;
-    final previousTime = previousMessage['time'] as DateTime;
+    final currentTime = (currentMessage['time'] as DateTime?) ?? DateTime.now();
+    final previousTime = (previousMessage['time'] as DateTime?) ?? DateTime.now();
     return currentTime.day != previousTime.day ||
         currentTime.month != previousTime.month ||
         currentTime.year != previousTime.year;
@@ -350,7 +327,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                           return Column(
                             key: ValueKey('date_$index'),
                             children: [
-                              _buildDateSeparator(_chatMessages[index]['time']),
+                              _buildDateSeparator((_chatMessages[index]['time'] as DateTime?) ?? DateTime.now()),
                               _buildMessage(index),
                             ],
                           );

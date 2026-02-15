@@ -6,7 +6,7 @@ class ChatService {
   ChatService._();
   static final ChatService instance = ChatService._();
 
-  static const String _geminiApiKey = 'AIzaSyB7JYJTseDer2kWAxQhDigWVEHke_D_k9Y';
+  static const String _geminiApiKey = 'AIzaSyBgIyNa6sP1UyLEhmbWtAsUL6LjMFqg-bw';
 
   GenerativeModel? _model;
   ChatSession? _chat;

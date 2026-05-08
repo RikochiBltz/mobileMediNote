@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../services/engagement_service.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_design.dart';
 import '../../widgets/pressable_scale.dart';
 import '../../widgets/shimmer_box.dart';
 import '../profile_screen.dart';
 import '../chat_screen.dart';
+import '../report_analysis_screen.dart';
 
 class DelegateDashboard extends StatefulWidget {
   final User user;
@@ -27,6 +29,7 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
   @override
   void initState() {
     super.initState();
+    EngagementService.instance.logFeature('dashboard');
     Future.delayed(const Duration(milliseconds: 650), () {
       if (mounted) {
         setState(() => _isDashboardLoading = false);
@@ -71,7 +74,7 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
     final isDark = _isDarkMode;
     final cardColor = AppDesign.surface(isDark);
     final navInactiveColor = AppDesign.navInactive(isDark);
-    
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -95,9 +98,7 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
         decoration: BoxDecoration(
           color: cardColor,
           border: Border(
-            top: BorderSide(
-              color: AppDesign.subtleBorder(isDark),
-            ),
+            top: BorderSide(color: AppDesign.subtleBorder(isDark)),
           ),
           boxShadow: [
             BoxShadow(
@@ -110,7 +111,10 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
         child: BottomNavigationBar(
           backgroundColor: cardColor,
           currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
+          onTap: (index) {
+            setState(() => _currentIndex = index);
+            EngagementService.instance.logFeature(_featureForIndex(index));
+          },
           type: BottomNavigationBarType.fixed,
           elevation: 0,
           selectedItemColor: _green,
@@ -127,11 +131,15 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
               label: 'Calendar',
             ),
             BottomNavigationBarItem(
-              icon: _buildNavIcon(icon: Icons.person, index: 2),
+              icon: _buildNavIcon(icon: Icons.fact_check, index: 2),
+              label: 'Report',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildNavIcon(icon: Icons.person, index: 3),
               label: 'Profile',
             ),
             BottomNavigationBarItem(
-              icon: _buildNavIcon(icon: Icons.chat, index: 3),
+              icon: _buildNavIcon(icon: Icons.chat, index: 4),
               label: 'Chatbot',
             ),
           ],
@@ -147,11 +155,29 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
       case 1:
         return _buildCalendarPage();
       case 2:
-        return _buildProfilePage();
+        return ReportAnalysisScreen(user: widget.user);
       case 3:
+        return _buildProfilePage();
+      case 4:
         return _buildChatPage();
       default:
         return _buildDashboardPage();
+    }
+  }
+
+  String _featureForIndex(int index) {
+    switch (index) {
+      case 1:
+        return 'calendar';
+      case 2:
+        return 'report_analysis';
+      case 3:
+        return 'profile';
+      case 4:
+        return 'chat';
+      case 0:
+      default:
+        return 'dashboard';
     }
   }
 
@@ -159,7 +185,7 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
     final cardColor = AppDesign.surface(_isDarkMode);
     final textColor = AppDesign.textPrimary(_isDarkMode);
     final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
-    
+
     return SafeArea(
       child: RefreshIndicator(
         color: _green,
@@ -206,7 +232,11 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
                                           color: Colors.white,
                                         ),
                                       ),
-                                      const Icon(Icons.emoji_people, color: Colors.white, size: 20),
+                                      const Icon(
+                                        Icons.emoji_people,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
@@ -226,11 +256,18 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withOpacity(0.2),
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                               child: Center(
                                 child: Text(
-                                  widget.user.name.split(' ').map((e) => e[0]).join().toUpperCase(),
+                                  widget.user.name
+                                      .split(' ')
+                                      .map((e) => e[0])
+                                      .join()
+                                      .toUpperCase(),
                                   style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
@@ -315,7 +352,12 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
                           'color': const Color(0xFF2980B9),
                         },
                       ].map((activity) {
-                        return _buildActivityCard(activity, cardColor, textColor, secondaryTextColor);
+                        return _buildActivityCard(
+                          activity,
+                          cardColor,
+                          textColor,
+                          secondaryTextColor,
+                        );
                       }),
                       const SizedBox(height: 24),
                     ],
@@ -364,7 +406,9 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
       width: width,
       height: height,
       radius: radius,
-      baseColor: _isDarkMode ? color.withOpacity(0.75) : Colors.white.withOpacity(0.9),
+      baseColor: _isDarkMode
+          ? color.withOpacity(0.75)
+          : Colors.white.withOpacity(0.9),
     );
   }
 
@@ -392,77 +436,75 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
     );
   }
 
-  Widget _buildActivityCard(Map<String, dynamic> activity, Color cardColor, Color textColor, Color secondaryTextColor) {
+  Widget _buildActivityCard(
+    Map<String, dynamic> activity,
+    Color cardColor,
+    Color textColor,
+    Color secondaryTextColor,
+  ) {
     return PressableScale(
       onTap: () {},
       child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppDesign.cardBorder(_isDarkMode),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (activity['color'] as Color).withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: (activity['color'] as Color).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                activity['icon'] as IconData,
-                color: activity['color'] as Color,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity['action'] as String,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    activity['details'] as String,
-                    style: TextStyle(
-                      color: secondaryTextColor,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              activity['time'] as String,
-              style: TextStyle(
-                color: secondaryTextColor,
-                fontSize: 11,
-              ),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
+          boxShadow: [
+            BoxShadow(
+              color: (activity['color'] as Color).withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: (activity['color'] as Color).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  activity['icon'] as IconData,
+                  color: activity['color'] as Color,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activity['action'] as String,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      activity['details'] as String,
+                      style: TextStyle(color: secondaryTextColor, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                activity['time'] as String,
+                style: TextStyle(color: secondaryTextColor, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
       ),
-    ));
+    );
   }
 
   Widget _buildCalendarPage() {
@@ -484,11 +526,26 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildSkeletonBox(height: 90, radius: 20, color: cardColor, width: 90),
+                        _buildSkeletonBox(
+                          height: 90,
+                          radius: 20,
+                          color: cardColor,
+                          width: 90,
+                        ),
                         const SizedBox(height: 20),
-                        _buildSkeletonBox(height: 24, width: 180, radius: 8, color: cardColor),
+                        _buildSkeletonBox(
+                          height: 24,
+                          width: 180,
+                          radius: 8,
+                          color: cardColor,
+                        ),
                         const SizedBox(height: 10),
-                        _buildSkeletonBox(height: 16, width: 240, radius: 8, color: cardColor),
+                        _buildSkeletonBox(
+                          height: 16,
+                          width: 240,
+                          radius: 8,
+                          color: cardColor,
+                        ),
                       ],
                     )
                   : Column(
@@ -553,66 +610,63 @@ class _DelegateDashboardState extends State<DelegateDashboard> {
     String title,
     String value,
     IconData icon,
-    Color color,
-    {
-      required Color cardColor,
-      required Color textColor,
-      required Color secondaryTextColor,
-    }
-  ) {
+    Color color, {
+    required Color cardColor,
+    required Color textColor,
+    required Color secondaryTextColor,
+  }) {
     return PressableScale(
       onTap: () {},
       child: Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppDesign.cardBorder(_isDarkMode),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
+          ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                title,
-                style: TextStyle(color: secondaryTextColor, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: TextStyle(color: secondaryTextColor, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   Widget _buildNavIcon({required IconData icon, required int index}) {

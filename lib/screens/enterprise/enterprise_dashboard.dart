@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../services/engagement_service.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_design.dart';
 import '../../widgets/pressable_scale.dart';
 import '../../widgets/shimmer_box.dart';
 import '../profile_screen.dart';
 import '../chat_screen.dart';
+import '../report_analysis_screen.dart';
 
 class EnterpriseDashboard extends StatefulWidget {
   final User user;
@@ -22,12 +24,12 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
   int _currentIndex = 0;
   bool _isDarkMode = false;
   bool _isDashboardLoading = true;
-  bool _isReportsLoading = false;
   bool _isCalendarLoading = false;
 
   @override
   void initState() {
     super.initState();
+    EngagementService.instance.logFeature('dashboard');
     Future.delayed(const Duration(milliseconds: 650), () {
       if (mounted) {
         setState(() => _isDashboardLoading = false);
@@ -59,14 +61,6 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     }
   }
 
-  Future<void> _refreshReports() async {
-    setState(() => _isReportsLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() => _isReportsLoading = false);
-    }
-  }
-
   Future<void> _refreshCalendar() async {
     setState(() => _isCalendarLoading = true);
     await Future.delayed(const Duration(milliseconds: 800));
@@ -80,7 +74,7 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     final isDark = _isDarkMode;
     final cardColor = AppDesign.surface(isDark);
     final navInactiveColor = AppDesign.navInactive(isDark);
-    
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -117,7 +111,10 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
         child: BottomNavigationBar(
           backgroundColor: cardColor,
           currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
+          onTap: (index) {
+            setState(() => _currentIndex = index);
+            EngagementService.instance.logFeature(_featureForIndex(index));
+          },
           type: BottomNavigationBarType.fixed,
           elevation: 0,
           selectedItemColor: _green,
@@ -168,6 +165,22 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     }
   }
 
+  String _featureForIndex(int index) {
+    switch (index) {
+      case 1:
+        return 'report_analysis';
+      case 2:
+        return 'calendar';
+      case 3:
+        return 'profile';
+      case 4:
+        return 'chat';
+      case 0:
+      default:
+        return 'dashboard';
+    }
+  }
+
   Widget _buildDashboardPage() {
     final cardColor = AppDesign.surface(_isDarkMode);
     final textColor = AppDesign.textPrimary(_isDarkMode);
@@ -184,131 +197,144 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
             child: _isDashboardLoading
                 ? _buildDashboardSkeleton(cardColor)
                 : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [_green, _greenLight],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _green.withOpacity(0.4),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Hello ${widget.user.name.split(' ')[0]} ',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [_green, _greenLight],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _green.withOpacity(0.4),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Hello ${widget.user.name.split(' ')[0]} ',
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.emoji_people,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Admin panel ready - manage delegates & reports.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.2),
+                                border: Border.all(
                                   color: Colors.white,
+                                  width: 2,
                                 ),
                               ),
-                              const Icon(Icons.emoji_people, color: Colors.white, size: 20),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Admin panel ready - manage delegates & reports.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.white70,
+                              child: Center(
+                                child: Text(
+                                  widget.user.name
+                                      .split(' ')
+                                      .where((e) => e.isNotEmpty)
+                                      .map((e) => e[0])
+                                      .take(2)
+                                      .join()
+                                      .toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Key Metrics'),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.0,
+                        children: [
+                          _buildKPICard(
+                            'Sales',
+                            'Rs 45,230',
+                            Icons.trending_up,
+                            const Color(0xFF27AE60),
+                            cardColor: cardColor,
+                            textColor: textColor,
+                            secondaryTextColor: secondaryTextColor,
+                          ),
+                          _buildKPICard(
+                            'Products',
+                            '328',
+                            Icons.inventory_2,
+                            const Color(0xFF2980B9),
+                            cardColor: cardColor,
+                            textColor: textColor,
+                            secondaryTextColor: secondaryTextColor,
+                          ),
+                          _buildKPICard(
+                            'Delegates',
+                            '24',
+                            Icons.people,
+                            const Color(0xFFE67E22),
+                            cardColor: cardColor,
+                            textColor: textColor,
+                            secondaryTextColor: secondaryTextColor,
+                          ),
+                          _buildKPICard(
+                            'Orders',
+                            '156',
+                            Icons.shopping_cart,
+                            const Color(0xFF9B59B6),
+                            cardColor: cardColor,
+                            textColor: textColor,
+                            secondaryTextColor: secondaryTextColor,
                           ),
                         ],
                       ),
-                    ),
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          widget.user.name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join().toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              _buildSectionTitle('Key Metrics'),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.0,
-                children: [
-                  _buildKPICard(
-                    'Sales',
-                    'Rs 45,230',
-                    Icons.trending_up,
-                    const Color(0xFF27AE60),
-                    cardColor: cardColor,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                  _buildKPICard(
-                    'Products',
-                    '328',
-                    Icons.inventory_2,
-                    const Color(0xFF2980B9),
-                    cardColor: cardColor,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
-                  ),
-                  _buildKPICard(
-                    'Delegates',
-                    '24',
-                    Icons.people,
-                    const Color(0xFFE67E22),
-                    cardColor: cardColor,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
-                  ),
-                  _buildKPICard(
-                    'Orders',
-                    '156',
-                    Icons.shopping_cart,
-                    const Color(0xFF9B59B6),
-                    cardColor: cardColor,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
           ),
         ),
-      ),
       ),
     );
   }
@@ -347,7 +373,9 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
       width: width,
       height: height,
       radius: radius,
-      baseColor: _isDarkMode ? color.withOpacity(0.75) : Colors.white.withOpacity(0.9),
+      baseColor: _isDarkMode
+          ? color.withOpacity(0.75)
+          : Colors.white.withOpacity(0.9),
     );
   }
 
@@ -378,79 +406,7 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
   }
 
   Widget _buildReportsPage() {
-    final cardColor = AppDesign.surface(_isDarkMode);
-    final titleColor = AppDesign.textPrimary(_isDarkMode);
-    final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
-
-    return SafeArea(
-      child: RefreshIndicator(
-        color: _green,
-        onRefresh: _refreshReports,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.72,
-              child: _isReportsLoading
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildSkeletonBox(height: 90, radius: 20, color: cardColor, width: 90),
-                        const SizedBox(height: 20),
-                        _buildSkeletonBox(height: 24, width: 180, radius: 8, color: cardColor),
-                        const SizedBox(height: 10),
-                        _buildSkeletonBox(height: 16, width: 240, radius: 8, color: cardColor),
-                      ],
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: _green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Icon(
-                            Icons.description,
-                            size: 56,
-                            color: _green,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Coming Soon',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: _green,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Reports feature is under development',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: secondaryTextColor,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'Pull down to refresh',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: titleColor.withOpacity(0.7),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
+    return ReportAnalysisScreen(user: widget.user);
   }
 
   Widget _buildCalendarPage() {
@@ -472,11 +428,26 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildSkeletonBox(height: 90, radius: 20, color: cardColor, width: 90),
+                        _buildSkeletonBox(
+                          height: 90,
+                          radius: 20,
+                          color: cardColor,
+                          width: 90,
+                        ),
                         const SizedBox(height: 20),
-                        _buildSkeletonBox(height: 24, width: 180, radius: 8, color: cardColor),
+                        _buildSkeletonBox(
+                          height: 24,
+                          width: 180,
+                          radius: 8,
+                          color: cardColor,
+                        ),
                         const SizedBox(height: 10),
-                        _buildSkeletonBox(height: 16, width: 240, radius: 8, color: cardColor),
+                        _buildSkeletonBox(
+                          height: 16,
+                          width: 240,
+                          radius: 8,
+                          color: cardColor,
+                        ),
                       ],
                     )
                   : Column(
@@ -541,54 +512,55 @@ class _EnterpriseDashboardState extends State<EnterpriseDashboard> {
     return PressableScale(
       onTap: () {},
       child: Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
+          ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                title,
-                style: TextStyle(color: secondaryTextColor, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: TextStyle(color: secondaryTextColor, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   Widget _buildNavIcon({required IconData icon, required int index}) {

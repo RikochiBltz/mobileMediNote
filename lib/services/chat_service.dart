@@ -1,15 +1,16 @@
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'dart:convert';
 
-/// Singleton service that holds the Gemini chat session and messages
-/// so they persist across navigation while the app is open.
+import 'package:http/http.dart' as http;
+
+import '../config/app_config.dart';
+import 'auth_service.dart';
+
+/// Singleton service that keeps chat history while the app is open.
 class ChatService {
   ChatService._();
   static final ChatService instance = ChatService._();
 
-  static const String _geminiApiKey = 'AIzaSyBgIyNa6sP1UyLEhmbWtAsUL6LjMFqg-bw';
-
-  GenerativeModel? _model;
-  ChatSession? _chat;
+  final _auth = AuthService();
   final List<Map<String, dynamic>> messages = [];
   bool _initialized = false;
 
@@ -17,19 +18,6 @@ class ChatService {
 
   void initialize({required String userName, required String userRole}) {
     if (_initialized) return;
-
-    _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
-      apiKey: _geminiApiKey,
-      systemInstruction: Content.system(
-        'You are MediNote AI, a helpful medical and pharmaceutical assistant chatbot. '
-        'You help pharmaceutical delegates, enterprise staff, and admins with questions '
-        'about medications, promotions, medical visits, and general pharmaceutical topics. '
-        'Keep your answers concise and professional. '
-        'The current user is $userName ($userRole).',
-      ),
-    );
-    _chat = _model!.startChat();
 
     messages.addAll([
       {
@@ -49,13 +37,50 @@ class ChatService {
     _initialized = true;
   }
 
-  ChatSession get chat => _chat!;
+  Future<String> sendMessage(String prompt) async {
+    final res = await _postChat(prompt);
+
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      await _auth.refreshAccessToken();
+      final retry = await _postChat(prompt);
+      return _answerFromResponse(retry);
+    }
+
+    return _answerFromResponse(res);
+  }
+
+  Future<http.Response> _postChat(String prompt) async {
+    return http.post(
+      Uri.parse('${AppConfig.agentBaseUrl}/api/v1/chat'),
+      headers: await _auth.authHeaders(),
+      body: jsonEncode({'prompt': prompt, 'include_raw_data': false}),
+    );
+  }
+
+  String _answerFromResponse(http.Response res) {
+    Map<String, dynamic>? data;
+    try {
+      data = jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      data = null;
+    }
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final message = data?['detail'] ?? data?['error'] ?? data?['message'];
+      throw Exception(message?.toString() ?? 'Chat request failed');
+    }
+
+    final answer = data?['answer']?.toString().trim();
+    if (answer == null || answer.isEmpty) {
+      throw Exception('The AI returned an empty answer');
+    }
+
+    return answer;
+  }
 
   /// Call this on logout to reset the chat history.
   void reset() {
     messages.clear();
-    _model = null;
-    _chat = null;
     _initialized = false;
   }
 }

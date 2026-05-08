@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+
+import '../models/user_model.dart';
+import '../services/auth_service.dart';
+import '../services/engagement_service.dart';
 import '../services/theme_provider.dart';
 import '../theme/app_design.dart';
+import 'admin/admin_dashboard.dart';
+import 'delegate/delegate_dashboard.dart';
+import 'enterprise/enterprise_dashboard.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -10,10 +17,12 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
+  final _auth = AuthService();
 
   @override
   void initState() {
@@ -23,23 +32,52 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       duration: const Duration(milliseconds: 900),
     );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _scale = Tween<double>(begin: 0.92, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    _scale = Tween<double>(
+      begin: 0.92,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
     _controller.forward();
+    _boot();
+  }
 
-    Future.delayed(const Duration(milliseconds: 1800), () {
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 350),
-          pageBuilder: (_, __, ___) => const LoginScreen(),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        ),
-      );
-    });
+  Future<void> _boot() async {
+    await Future.delayed(const Duration(milliseconds: 1800));
+    if (!mounted) return;
+
+    final user = await _auth.currentUser();
+    if (!mounted) return;
+    if (user != null) {
+      await EngagementService.instance.logSessionStart(source: 'restore');
+    }
+
+    _replaceWith(_screenForUser(user));
+  }
+
+  Widget _screenForUser(User? user) {
+    if (user == null) {
+      return const LoginScreen();
+    }
+
+    switch (user.userRole) {
+      case UserRole.delegate:
+        return DelegateDashboard(user: user);
+      case UserRole.enterprise:
+        return EnterpriseDashboard(user: user);
+      case UserRole.admin:
+        return AdminDashboard(admin: user);
+    }
+  }
+
+  void _replaceWith(Widget screen) {
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (_, __, ___) => screen,
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
   }
 
   @override
@@ -81,7 +119,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: AppDesign.green.withOpacity(0.2),
+                            color: AppDesign.green.withValues(alpha: 0.2),
                             blurRadius: 26,
                             offset: const Offset(0, 10),
                           ),

@@ -4,11 +4,10 @@ import 'delegate/delegate_dashboard.dart';
 import 'enterprise/enterprise_dashboard.dart';
 import 'admin/admin_dashboard.dart';
 import '../models/user_model.dart';
+import '../services/auth_service.dart';
+import '../services/engagement_service.dart';
 import '../services/theme_provider.dart';
 import '../theme/app_design.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -24,12 +23,11 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isDarkMode = false;
-  static const String _baseUrl = "https://medinote-cdcc.onrender.com";
-  final _storage = const FlutterSecureStorage();
+  final _auth = AuthService();
   final LocalAuthentication _localAuth = LocalAuthentication();
 
   UserRole _selectedRole = UserRole.delegate;
-  bool _rememberMe = false;
+  bool _rememberMe = true;
 
   static const _green = AppDesign.green;
   static const _greenDark = Color(0xFF1E8449);
@@ -71,17 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
         return 'Enterprise';
       case UserRole.admin:
         return 'Admin';
-    }
-  }
-
-  String _roleString(UserRole role) {
-    switch (role) {
-      case UserRole.delegate:
-        return 'delegate';
-      case UserRole.enterprise:
-        return 'enterprise';
-      case UserRole.admin:
-        return 'admin';
     }
   }
 
@@ -153,59 +140,18 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final uri = Uri.parse("$_baseUrl/api/auth/login");
-
-      final res = await http.post(
-        uri,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "password": password}),
+      final result = await _auth.login(
+        email,
+        password,
+        rememberMe: _rememberMe,
       );
-
-      if (res.statusCode != 200) {
-        throw Exception("Invalid email or password");
-      }
-
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      final token = data["accessToken"] as String?;
-      final role = (data["role"] as String?)?.toUpperCase();
-      final mail = data["email"] as String?;
-
-      if (token == null || role == null || mail == null) {
-        throw Exception("Bad server response");
-      }
-
-      await _storage.write(key: "accessToken", value: token);
-      await _storage.write(key: "role", value: role);
-      await _storage.write(key: "email", value: mail);
+      await EngagementService.instance.logSessionStart(source: 'login');
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      final UserRole userRole;
-      if (role == "DELEGATE") {
-        userRole = UserRole.delegate;
-      } else if (role == "STAFF") {
-        userRole = UserRole.enterprise;
-      } else if (role == "ADMIN") {
-        userRole = UserRole.admin;
-      } else {
-        throw Exception("Unknown role: $role");
-      }
-
-      final user = User(
-        id: '1',
-        email: mail,
-        name: userRole == UserRole.delegate
-            ? 'Dr. John Smith'
-            : userRole == UserRole.enterprise
-            ? 'Staff User'
-            : 'Admin PharmaCare',
-        role: role.toLowerCase(),
-        userRole: userRole,
-        company: 'PharmaCare Inc.',
-        phone: userRole == UserRole.delegate ? '+33 6 12 34 56 78' : null,
-        region: userRole == UserRole.delegate ? 'Île-de-France' : null,
-      );
+      final user = result.user;
+      final userRole = user.userRole;
 
       if (userRole == UserRole.delegate) {
         Navigator.of(context).pushReplacement(
@@ -234,15 +180,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scaffoldBackgroundColor = _isDarkMode ? AppDesign.darkBackground : Colors.white;
     final cardColor = AppDesign.surface(_isDarkMode);
     final textColor = AppDesign.textPrimary(_isDarkMode);
     final secondaryTextColor = AppDesign.textSecondary(_isDarkMode);
-    
+
     return Scaffold(
       body: SingleChildScrollView(
         child: Container(
-          height: MediaQuery.of(context).size.height,
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height,
+          ),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -288,7 +235,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 24,
+                  ),
                   child: TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0, end: 1),
                     duration: const Duration(milliseconds: 650),
@@ -302,303 +252,364 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
                     child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 20),
-                  // Logo & Title with Picture
-                  Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [_green, _greenLight],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _green.withOpacity(0.4),
-                          blurRadius: 25,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(70),
-                      child: Image.asset(
-                        'assets/images/login1.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.local_pharmacy,
-                            size: 70,
-                            color: Colors.white,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'PharmaCare',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      foreground: Paint()
-                        ..shader = LinearGradient(
-                          colors: [_green, _greenDark],
-                        ).createShader(
-                          const Rect.fromLTWH(0, 0, 200, 50),
-                        ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Medical Note Management',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: secondaryTextColor,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _isDarkMode ? const Color(0xFF1E1E1E).withOpacity(0.82) : Colors.white.withOpacity(0.86),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: AppDesign.cardBorder(_isDarkMode)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _green.withOpacity(_isDarkMode ? 0.18 : 0.12),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Role Selector
+                        const SizedBox(height: 20),
+                        // Logo & Title with Picture
                         Container(
-                          padding: const EdgeInsets.all(5),
+                          width: 140,
+                          height: 140,
                           decoration: BoxDecoration(
-                            color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(16),
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [_green, _greenLight],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _green.withOpacity(0.4),
+                                blurRadius: 25,
+                                spreadRadius: 5,
+                              ),
+                            ],
                           ),
-                          child: Row(
-                            children: UserRole.values.map((role) {
-                              final isSelected = _selectedRole == role;
-                              return Expanded(
-                                child: GestureDetector(
-                                  onTap: () => setState(() => _selectedRole = role),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? _green : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          _roleIcon(role),
-                                          color: isSelected ? Colors.white : Colors.grey[600],
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          _roleLabel(role),
-                                          style: TextStyle(
-                                            color: isSelected ? Colors.white : Colors.grey[600],
-                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(70),
+                            child: Image.asset(
+                              'assets/images/login1.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.local_pharmacy,
+                                  size: 70,
+                                  color: Colors.white,
+                                );
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(height: 20),
-                  // Email Field
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _green.withOpacity(0.08),
-                          blurRadius: 20,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(color: textColor),
-                      decoration: InputDecoration(
-                        hintText: 'Email address',
-                        hintStyle: TextStyle(color: secondaryTextColor),
-                        prefixIcon: Icon(Icons.email_outlined, color: _green),
-                        filled: true,
-                        fillColor: cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  // Password Field
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _green.withOpacity(0.08),
-                          blurRadius: 20,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      style: TextStyle(color: textColor),
-                      decoration: InputDecoration(
-                        hintText: 'Password',
-                        hintStyle: TextStyle(color: secondaryTextColor),
-                        prefixIcon: Icon(Icons.lock_outline, color: _green),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                            color: _green,
+                        Text(
+                          'PharmaCare',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            foreground: Paint()
+                              ..shader =
+                                  LinearGradient(
+                                    colors: [_green, _greenDark],
+                                  ).createShader(
+                                    const Rect.fromLTWH(0, 0, 200, 50),
+                                  ),
                           ),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                         ),
-                        filled: true,
-                        fillColor: cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+                        const SizedBox(height: 8),
+                        Text(
+                          'Medical Note Management',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: secondaryTextColor,
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _rememberMe,
-                        activeColor: _green,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        side: BorderSide(color: _green.withOpacity(0.6)),
-                        onChanged: (value) => setState(() => _rememberMe = value ?? false),
-                      ),
-                      Text(
-                        'Remember me',
-                        style: TextStyle(
-                          color: secondaryTextColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  // Forgot Password
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-                      ),
-                      child: Text(
-                        'Forgot Password?',
-                        style: TextStyle(
-                          color: _green,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Login Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 4,
-                        shadowColor: _green.withOpacity(0.4),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
+                        const SizedBox(height: 32),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _isDarkMode
+                                ? const Color(0xFF1E1E1E).withOpacity(0.82)
+                                : Colors.white.withOpacity(0.86),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: AppDesign.cardBorder(_isDarkMode),
                             ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Biometric Login
-                  OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _handleLogin,
-                    icon: Icon(Icons.fingerprint, color: _green),
-                    label: Text(
-                      'Login with Biometrics',
-                      style: TextStyle(color: _green),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                      side: BorderSide(color: _green.withOpacity(0.5)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _green.withOpacity(
+                                  _isDarkMode ? 0.18 : 0.12,
+                                ),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              // Role Selector
+                              Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: _isDarkMode
+                                      ? const Color(0xFF2C2C2C)
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: UserRole.values.map((role) {
+                                    final isSelected = _selectedRole == role;
+                                    return Expanded(
+                                      child: GestureDetector(
+                                        onTap: () => setState(
+                                          () => _selectedRole = role,
+                                        ),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? _green
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                _roleIcon(role),
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : Colors.grey[600],
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _roleLabel(role),
+                                                style: TextStyle(
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : Colors.grey[600],
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w500,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // Email Field
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: _green.withOpacity(0.08),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  style: TextStyle(color: textColor),
+                                  decoration: InputDecoration(
+                                    hintText: 'Email address',
+                                    hintStyle: TextStyle(
+                                      color: secondaryTextColor,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.email_outlined,
+                                      color: _green,
+                                    ),
+                                    filled: true,
+                                    fillColor: cardColor,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              // Password Field
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: _green.withOpacity(0.08),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: _passwordController,
+                                  obscureText: _obscurePassword,
+                                  style: TextStyle(color: textColor),
+                                  decoration: InputDecoration(
+                                    hintText: 'Password',
+                                    hintStyle: TextStyle(
+                                      color: secondaryTextColor,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.lock_outline,
+                                      color: _green,
+                                    ),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined,
+                                        color: _green,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _obscurePassword =
+                                            !_obscurePassword,
+                                      ),
+                                    ),
+                                    filled: true,
+                                    fillColor: cardColor,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Checkbox(
+                                    value: _rememberMe,
+                                    activeColor: _green,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    side: BorderSide(
+                                      color: _green.withOpacity(0.6),
+                                    ),
+                                    onChanged: (value) => setState(
+                                      () => _rememberMe = value ?? false,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Remember me',
+                                    style: TextStyle(
+                                      color: secondaryTextColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              // Forgot Password
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ForgotPasswordScreen(),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Forgot Password?',
+                                    style: TextStyle(
+                                      color: _green,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // Login Button
+                              SizedBox(
+                                width: double.infinity,
+                                height: 54,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    elevation: 4,
+                                    shadowColor: _green.withOpacity(0.4),
+                                  ),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Sign In',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // Biometric Login
+                              OutlinedButton.icon(
+                                onPressed: _isLoading ? null : _handleLogin,
+                                icon: Icon(Icons.fingerprint, color: _green),
+                                label: Text(
+                                  'Login with Biometrics',
+                                  style: TextStyle(color: _green),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 24,
+                                  ),
+                                  side: BorderSide(
+                                    color: _green.withOpacity(0.5),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        // Footer
+                        Text(
+                          'PharmaCare © 2024',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                       ],
                     ),
-                  ),
-                  const Spacer(),
-                  // Footer
-                  Text(
-                    'PharmaCare © 2024',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: secondaryTextColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                    ],
                   ),
                 ),
-              ),
               ),
             ],
           ),

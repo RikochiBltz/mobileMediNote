@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
+import '../services/auth_service.dart';
+import '../services/chat_service.dart';
 import '../services/theme_provider.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final User user;
@@ -12,10 +15,10 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   static const _green = Color(0xFF27AE60);
   static const _greenLight = Color(0xFF52BE80);
-  static const _greenDark = Color(0xFF1E8449);
   bool _isDarkMode = false;
 
   late AnimationController _animationController;
@@ -34,9 +37,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+        );
 
     _animationController.forward();
 
@@ -65,9 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   void _showEditMessage(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Edit profile coming soon"),
         backgroundColor: _green,
@@ -128,10 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             Text(
               'Are you sure you want to logout from PharmaCare?',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 15, color: Colors.grey[600]),
             ),
             const SizedBox(height: 28),
             Row(
@@ -158,8 +157,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
+                      await AuthService().logout();
+                      ChatService.instance.reset();
+                      if (!context.mounted) return;
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
                       );
@@ -206,7 +208,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _isDarkMode ? _green.withOpacity(0.2) : _green.withOpacity(0.1),
+              color: _isDarkMode
+                  ? _green.withOpacity(0.2)
+                  : _green.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -261,12 +265,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     final cardColor = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF2C3E50);
-    final secondaryTextColor = _isDarkMode ? Colors.grey[400] : Colors.grey[600];
-    final scaffoldBackgroundColor = _isDarkMode ? const Color(0xFF121212) : Colors.white;
-    final headerBackgroundColor = _isDarkMode
-        ? const Color(0xFF1E1E1E)
-        : Colors.grey[50];
-
+    final secondaryTextColor = _isDarkMode
+        ? Colors.grey[400]
+        : Colors.grey[600];
+    final scaffoldBackgroundColor = _isDarkMode
+        ? const Color(0xFF121212)
+        : Colors.white;
     return Scaffold(
       backgroundColor: scaffoldBackgroundColor,
       body: SafeArea(
@@ -331,7 +335,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         right: 30,
                         child: _AnimatedCircle(
                           size: 80,
-                          color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                          color: _isDarkMode
+                              ? const Color(0xFF2C2C2C)
+                              : Colors.white,
                           duration: 2000,
                         ),
                       ),
@@ -362,7 +368,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                                    color: _isDarkMode
+                                        ? const Color(0xFF2C2C2C)
+                                        : Colors.white,
                                     width: 4,
                                   ),
                                   boxShadow: [
@@ -408,10 +416,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                               tween: Tween(begin: 0, end: 1),
                               duration: const Duration(milliseconds: 600),
                               builder: (context, value, child) {
-                                return Opacity(
-                                  opacity: value,
-                                  child: child,
-                                );
+                                return Opacity(opacity: value, child: child);
                               },
                               child: Text(
                                 widget.user.name,
@@ -427,7 +432,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             const SizedBox(height: 12),
                             // Role badge with gradient
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [_green, _greenLight],
@@ -472,7 +480,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSectionHeader('Personal Information', textColor),
+                          _buildSectionHeader(
+                            'Personal Information',
+                            textColor,
+                          ),
                           const SizedBox(height: 20),
                           _buildProfileField(
                             icon: Icons.person_outline,
@@ -603,7 +614,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             icon: Icons.notifications_outlined,
                             label: 'Notifications',
                             color: const Color(0xFF2980B9),
-                            onTap: () => _showEditMessage(context),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const NotificationsScreen(),
+                                ),
+                              );
+                            },
                             textColor: textColor,
                           ),
                           const SizedBox(height: 12),
@@ -642,17 +659,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildAnimatedCard({required int index, required Color cardColor, required Widget child}) {
+  Widget _buildAnimatedCard({
+    required int index,
+    required Color cardColor,
+    required Widget child,
+  }) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 400 + (index * 100)),
       builder: (context, value, child) {
         return Transform.scale(
           scale: 0.95 + (0.05 * value),
-          child: Opacity(
-            opacity: value,
-            child: child,
-          ),
+          child: Opacity(opacity: value, child: child),
         );
       },
       child: Container(
@@ -746,11 +764,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             ],
           ),
         ),
-        Icon(
-          Icons.arrow_forward_ios,
-          color: Colors.grey[400],
-          size: 16,
-        ),
+        Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
       ],
     );
   }
@@ -835,11 +849,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   ),
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey[400],
-                size: 18,
-              ),
+              Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 18),
             ],
           ),
         ),
@@ -906,7 +916,8 @@ class _AnimatedCircle extends StatefulWidget {
   State<_AnimatedCircle> createState() => _AnimatedCircleState();
 }
 
-class _AnimatedCircleState extends State<_AnimatedCircle> with TickerProviderStateMixin {
+class _AnimatedCircleState extends State<_AnimatedCircle>
+    with TickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -933,18 +944,12 @@ class _AnimatedCircleState extends State<_AnimatedCircle> with TickerProviderSta
     return AnimatedBuilder(
       animation: _scaleAnimation,
       builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnimation.value,
-          child: child,
-        );
+        return Transform.scale(scale: _scaleAnimation.value, child: child);
       },
       child: Container(
         width: widget.size,
         height: widget.size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: widget.color,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color),
       ),
     );
   }
